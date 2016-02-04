@@ -5,11 +5,11 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width initial-scale=1">
 
-  <title>通过流进行解压缩文件</title>
-  <meta name="description" content="这里为了使代码更加简洁，直接用了transfer来挂接两路流的传输操作。">
+  <title>xmake高级特性之合并静态库</title>
+  <meta name="description" content="xmake的add_files接口不仅可以添加源代码文件进行编译，还可以直接添加.o/obj对象文件、以及.a/lib的库文件到编译目标中，这个跟add_links是有区别的">
 
   <link rel="stylesheet" href="/css/main.css">
-  <link rel="canonical" href="http://tboox.net/cn/tbox/2016/02/04/stream-zip.html">
+  <link rel="canonical" href="http://tboox.net/cn/xmake/2016/02/04/xmake-merge-static-library.html">
   <link rel="alternate" type="application/atom+xml" title="TBOOX" href="http://tboox.net/feed.xml" />
   <script src="/scripts/jquery-1.11.2.min.js"></script>
   <script src="/scripts/pithy.js"></script>
@@ -89,43 +89,52 @@
         <div class="post">
   <br>
   <header class="post-header">
-    <h1 class="post-title">通过流进行解压缩文件</h1>
+    <h1 class="post-title">xmake高级特性之合并静态库</h1>
     <p class="post-meta">Feb 4, 2016</p>
   </header>
 
   <article class="post-content">
-    <p>这里为了使代码更加简洁，直接用了transfer来挂接两路流的传输操作。</p>
+    <p>xmake的add_files接口不仅可以添加源代码文件进行编译，还可以直接添加<em>.o/obj对象文件、以及</em>.a/lib的库文件到编译目标中，这个跟add_links是有区别的</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>// 初始化文件输入流
-tb_stream_ref_t istream = tb_stream_init_from_url("/home/file.txt");
+<ul>
+  <li>add_links：只能添加链接，例如： -lxxxx 这种，链接的目标也只能是可执行程序、动态库，而且只会链接需要的代码进去</li>
+  <li>add_files：是直接将静态库中的所有对象文件，解包、重新打包到新的target中，这个target可以是新的静态库，也可以是可执行程序、或者动态库</li>
+</ul>
 
-// 初始化文件输出流
-tb_stream_ref_t ostream = tb_stream_init_from_file("/home/file.gz", TB_FILE_MODE_RW | TB_FILE_MODE_CREAT | TB_FILE_MODE_BINARY | TB_FILE_MODE_TRUNC);
+<p>例如：</p>
 
-// 初始化解压缩流，以istream作为输入
-tb_stream_ref_t fstream = tb_stream_init_filter_from_zip(istream, TB_ZIP_ALGO_GZIP, TB_ZIP_ACTION_INFLATE);
+<div class="highlighter-rouge"><pre class="highlight"><code>add_target("test")
+    
+     -- 生成静态库：libtest.a
+     set_kind("static")
 
-// 初始化压缩流，以istream作为输入
-//tb_stream_ref_t fstream = tb_stream_init_filter_from_zip(istream, TB_ZIP_ALGO_GZIP, TB_ZIP_ACTION_DEFLATE);    
+     -- 添加对象文件
+     add_files("obj/*.o")
 
-// 进行流传输，并且通过 fstream进行中间外挂解压、压缩
-if (istream &amp;&amp; ostream &amp;&amp; fstream) 
-{
-    /* 保存流数据，如果每个流都还没有调用tb_stream_open打开过
-     * 这里会自动帮你打开，这样上层接口使用上，看上去更加简洁明了
-     * 
-     * 后面三个参数主要用于：限速、进度信息回调，这些之后再详细说明
-     * 现在只需要传空就行了
-     *
-     * save 是 实际传输的数据大小，失败返回：-1
-     */
-    tb_hong_t save = tb_transfer_done(fstream, ostream, 0, tb_null, tb_null);
-}
+     -- 添加静态库，将里面的对象文件重新打包到libtest.a中，生成新的静态库
+     add_files("lib/*.a")
+</code></pre>
+</div>
 
-// 释放流数据
-if (fstream) tb_stream_exit(fstream);
-if (istream) tb_stream_exit(istream);
-if (ostream) tb_stream_exit(ostream);
+<p>这个target模块，可以没有任何源码，单纯的将所有静态库、对象文件重新打包到一个新的静态库中，当然再加一些源文件也是可以的</p>
+
+<p>target的类型也没有限定，你也可以指定输出为动态库：shared，可执行程序：binary</p>
+
+<p>例如：</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>add_target("test2")
+    
+     -- 生成动态库：libtest2.so
+     set_kind("shared")
+
+     -- 添加对象文件
+     add_files("obj/*.o")
+
+     -- 添加静态库libtest.a中的所有对象文件
+     add_files("lib/libtest.a")
+
+     -- 添加一些源文件
+     add_files("src/*.c")
 </code></pre>
 </div>
 
